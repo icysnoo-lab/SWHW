@@ -720,7 +720,7 @@ function renderFeedTree(posts) {
   // Apply post height enhancements (compactness & text truncation)
   adjustPostMediaCompactness();
   handleTextTruncation();
-  optimizeThreeImageGalleries();
+  optimizeImageGalleries();
 }
 
 // Recursive renderer returning HTML node
@@ -788,16 +788,50 @@ function renderPostTreeRecursive(post) {
       attachmentsHtml += '</div>';
     }
 
-    nonImgAttachments.forEach(att => {
+    const videoAttachments = nonImgAttachments.filter(att => /\.(mp4|webm|mov)$/i.test(att.file_path));
+    const otherAttachments = nonImgAttachments.filter(att => !/\.(mp4|webm|mov)$/i.test(att.file_path));
+
+    if (videoAttachments.length > 0) {
+      let videoGalleryClass = '';
+      if (videoAttachments.length > 6) videoGalleryClass = 'gallery-collapsed';
+
+      if (videoAttachments.length > 1) {
+        attachmentsHtml += `<div class="post-video-gallery ${videoGalleryClass}">`;
+        
+        if (videoAttachments.length <= 6) {
+          videoAttachments.forEach(att => {
+            attachmentsHtml += `<video controls class="media-video" src="${att.file_path}" preload="metadata"></video>`;
+          });
+        } else {
+          // Collapsed view for 6+ videos
+          for (let i = 0; i < 5; i++) {
+            attachmentsHtml += `<video controls class="media-video" src="${videoAttachments[i].file_path}" preload="metadata"></video>`;
+          }
+          const att6 = videoAttachments[5];
+          attachmentsHtml += `
+            <div class="gallery-more-container">
+              <video controls class="media-video" src="${att6.file_path}" preload="metadata"></video>
+              <div class="gallery-more-overlay">+${videoAttachments.length - 5}</div>
+            </div>
+          `;
+          for (let i = 6; i < videoAttachments.length; i++) {
+            attachmentsHtml += `<video controls class="media-video" src="${videoAttachments[i].file_path}" preload="metadata" style="display: none;"></video>`;
+          }
+        }
+        
+        attachmentsHtml += `</div>`;
+      } else {
+        attachmentsHtml += `<video controls class="media-video" src="${videoAttachments[0].file_path}"></video>`;
+      }
+    }
+
+    otherAttachments.forEach(att => {
       const isAudio = /\.(mp3|wav|flac|ogg)$/i.test(att.file_path);
-      const isVideo = /\.(mp4)$/i.test(att.file_path);
       const isPdf = /\.pdf$/i.test(att.file_path);
       const isDjvu = /\.djvu$/i.test(att.file_path);
 
       if (isAudio) {
         attachmentsHtml += `<audio controls class="media-audio" src="${att.file_path}"></audio>`;
-      } else if (isVideo) {
-        attachmentsHtml += `<video controls class="media-video" src="${att.file_path}"></video>`;
       } else if (isPdf) {
         attachmentsHtml += `
           <div class="pdf-container" style="margin-top: 10px; width: 100%;">
@@ -1175,7 +1209,7 @@ feedContainer.addEventListener('click', (e) => {
   if (e.target.classList.contains('gallery-more-overlay')) {
     e.preventDefault();
     e.stopPropagation();
-    const gallery = e.target.closest('.post-gallery');
+    const gallery = e.target.closest('.post-gallery') || e.target.closest('.post-video-gallery');
     if (gallery) {
       gallery.classList.remove('gallery-collapsed');
       gallery.classList.add('gallery-expanded');
@@ -1197,15 +1231,51 @@ feedContainer.addEventListener('click', (e) => {
   }
 });
 
-// Optimize layout for 3-image galleries based on natural image aspect ratios
-function optimizeThreeImageGalleries() {
-  const galleries = document.querySelectorAll('.post-gallery.gallery-3');
+// Optimize layout for galleries based on natural image aspect ratios
+function optimizeImageGalleries() {
+  const galleries = document.querySelectorAll('.post-gallery.gallery-3, .post-gallery.gallery-6, .post-gallery.gallery-collapsed, .post-gallery.gallery-expanded, .post-video-gallery');
   galleries.forEach(gallery => {
     if (gallery.dataset.optimized) return;
-    gallery.dataset.optimized = "true";
+    
+    // Video gallery logic
+    if (gallery.classList.contains('post-video-gallery')) {
+      const vids = Array.from(gallery.querySelectorAll('.media-video'));
+      if (vids.length < 2) return;
+      gallery.dataset.optimized = "true";
+      
+      let loadedCount = 0;
+      let vertCount = 0;
+      let horizCount = 0;
+
+      vids.forEach(vid => {
+        const checkDimensions = () => {
+          if (vid.videoHeight > vid.videoWidth) vertCount++;
+          else horizCount++;
+          
+          loadedCount++;
+          if (loadedCount === vids.length) {
+            if (vertCount > horizCount) {
+              gallery.classList.add('majority-vertical');
+            }
+          }
+        };
+
+        if (vid.readyState >= 1) { // HAVE_METADATA
+          checkDimensions();
+        } else {
+          vid.addEventListener('loadedmetadata', checkDimensions);
+        }
+      });
+      return;
+    }
 
     const imgs = Array.from(gallery.querySelectorAll('.media-image'));
-    if (imgs.length !== 3) return;
+    const isGallery3 = gallery.classList.contains('gallery-3') && imgs.length === 3;
+    const isGallery6Plus = imgs.length >= 6;
+
+    if (!isGallery3 && !isGallery6Plus) return;
+    
+    gallery.dataset.optimized = "true";
 
     let loadedCount = 0;
     const imgData = [];
@@ -1221,12 +1291,16 @@ function optimizeThreeImageGalleries() {
         });
         
         loadedCount++;
-        if (loadedCount === 3) {
-          applyThreeImageLayout(gallery, imgData);
+        if (loadedCount === imgs.length) {
+          if (isGallery3) {
+            applyThreeImageLayout(gallery, imgData);
+          } else if (isGallery6Plus) {
+            applySixPlusImageLayout(gallery, imgData);
+          }
         }
       };
 
-      if (img.complete) {
+      if (img.complete && img.naturalWidth > 0) {
         checkDimensions();
       } else {
         img.addEventListener('load', checkDimensions);
@@ -1234,6 +1308,21 @@ function optimizeThreeImageGalleries() {
       }
     });
   });
+}
+
+function applySixPlusImageLayout(gallery, imgData) {
+  let horizCount = 0;
+  let vertCount = 0;
+  imgData.forEach(data => {
+    if (data.width >= data.height) horizCount++;
+    else vertCount++;
+  });
+  
+  if (horizCount >= vertCount) {
+    gallery.classList.add('majority-horizontal');
+  } else {
+    gallery.classList.add('majority-vertical');
+  }
 }
 
 function applyThreeImageLayout(gallery, imgData) {

@@ -1101,26 +1101,28 @@ body {
 
 /* Exactly 6 Images: 3x2 grid, equal heights, no overlay */
 .post-gallery.gallery-6 {
-  height: 360px;
-  max-height: 450px;
+  height: auto;
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: auto;
 }
 .post-gallery.gallery-6 .media-image {
-  height: 100%;
+  aspect-ratio: 4 / 3;
+  height: auto;
   object-fit: cover;
+  width: 100%;
 }
 
 /* 6+ Images Collapsed: 3x2 grid, equal heights, overlay on 6th item */
 .post-gallery.gallery-collapsed {
-  height: 360px;
-  max-height: 450px;
+  height: auto;
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: auto;
 }
 .post-gallery.gallery-collapsed .media-image {
-  height: 100%;
+  aspect-ratio: 4 / 3;
+  height: auto;
   object-fit: cover;
+  width: 100%;
 }
 
 /* 6+ Images Expanded (Unrolled): 3xn grid, all images same height */
@@ -1131,9 +1133,18 @@ body {
   grid-template-rows: auto;
 }
 .post-gallery.gallery-expanded .media-image {
-  height: 200px;
+  aspect-ratio: 4 / 3;
+  height: auto;
   object-fit: cover;
+  width: 100%;
   display: block !important;
+}
+
+/* Aspect Ratio Overrides for Majority Vertical */
+.post-gallery.gallery-6.majority-vertical .media-image,
+.post-gallery.gallery-collapsed.majority-vertical .media-image,
+.post-gallery.gallery-expanded.majority-vertical .media-image {
+  aspect-ratio: 3 / 4;
 }
 .post-gallery.gallery-expanded .gallery-more-container {
   display: block;
@@ -1332,5 +1343,43 @@ body {
 @keyframes zoomIn {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+/* Video Gallery */
+.post-video-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+.post-video-gallery .media-video {
+  width: 100%;
+  border-radius: 6px;
+  background-color: rgba(0,0,0,0.2);
+  max-height: none !important;
+}
+
+@media (min-width: 768px) {
+  .post-video-gallery.majority-vertical {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    align-items: start;
+  }
+  .post-video-gallery.majority-vertical .media-video {
+    height: auto;
+  }
+}
+
+/* Video Gallery Unrolled */
+.post-video-gallery.gallery-expanded .media-video {
+  display: block !important;
+}
+.post-video-gallery.gallery-expanded .gallery-more-container {
+  display: block;
+  height: auto;
+}
+.post-video-gallery.gallery-expanded .gallery-more-overlay {
+  display: none !important;
 }
 
